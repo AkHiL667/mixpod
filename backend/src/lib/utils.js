@@ -11,4 +11,4 @@ export const generateToken = (userId, res)=>{
     sameSite: "strict",
   })
   return token;
-}
+} 

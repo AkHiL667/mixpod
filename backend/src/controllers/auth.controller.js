@@ -1,96 +1,97 @@
-import asyncHandler from 'express-async-handler';
+import asyncHandler from "express-async-handler";
 import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
+import { generateToken } from "../lib/utils.js";
+import cloudinary from "../lib/cloudinary.js";
 
+const signup = asyncHandler(async (req, res) => {
+  //get the info from req body
+  const { fullName, email, password } = req.body;
+  //check is all fields are filled
+  if (!fullName || !email || !password) {
+    return res.status(400).json({ message: "must fill all the fields" });
+  }
+  //check password
+  if (!password || password.length < 6)
+    return res.status(400).json({ message: "password must be 6 characters" });
+  //check if user exists
+  const userExist = await User.findOne({ email });
+  if (userExist)
+    return res
+      .status(400)
+      .json({ message: "user with this mail already exists" });
+  //create salt for hashing
+  const salt = await bcrypt.genSalt(10);
+  //hash password
+  const hashedPassword = await bcrypt.hash(password, salt);
+  //create new user
+  const newuser = new User({
+    fullName,
+    email,
+    password: hashedPassword,
+  });
 
-const signup = asyncHandler(async(req,res)=>{
- //get the info form req body
- const {userName, email, password} = req.body;
- //check password
- if(password < 6 ) return res.status(400).json({message:"password must be 6 characters"});
-  //check if user exist
- const userExist = await User.findOne({email});
- //give error if user already exists
- if(userExist) return res.status(400).json({message:"user with this mail already exists"});
- //create salt for hashing
- const salt = await bcrypt.genSalt(10);
- //hash password
- const hashedPassword = await bcrypt.hash(password,salt);
- //create new user
- const newuser = new User({
-  userName,
-  email,
-  password:hashedPassword
- });
+  if (newuser) {
+    await newuser.save();
+    generateToken(newuser._id, res);
+    res.status(201).json({
+      _id: newuser._id,
+      fullName: newuser.fullName,
+      email: newuser.email,
+      profilePic: newuser.profilePic,
+    });
+  } else {
+    return res.status(400).json({ message: "invalid user data" });
+  }
 });
-//generate the jwt token
-if(newuser){
 
-}else{
-  return res.status(400).json({message:"invalid user data"})
-}
+const login = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  //check if email and password are filled
+  if (!email || !password) {
+    return res.status(400).json({ message: "enter all the fields" });
+  }
+  //check if user exists
+  const user = await User.findOne({ email });
 
+  if (!user) {
+    return res.status(400).json({ message: "Invalid credentials" });
+  }
+  //check password is correct
+  const isPasswordCorrect = await bcrypt.compare(password, user.password);
+  if (!isPasswordCorrect) {
+    return res.status(400).json({ message: "Invalid credentials" });
+  }
+  generateToken(user._id, res);
+  res.status(200).json({
+    _id: user._id,
+    fullName: user.fullName,
+    email: user.email,
+    profilePic: user.profilePic,
+  });
+});
 
+const logout = asyncHandler((req, res) => {
+  res.cookie("jwt", "", { maxAge: 0 });
+  res.status(200).json({ message: "logged out successfully" });
+});
 
+const updateProfile = asyncHandler(async(req, res)=>{
+  const {profilePic} = req.body;
+  const userId = req.user._id;
+  if(!profilePic){
+    return res.status(400).json({message:"profile pic is required"})
+  }
+  const uploadResponse = await cloudinary.uploader.upload(profilePic)
 
+  const updatedUser = await User.findByIdAndUpdate(userId, {profilePic:uploadResponse.secure_url},{new:true})
 
+  res.status(200).json(updatedUser)
+})
 
-// export const signup = async (req, res) => {
-//   const { fullName, email, password } = req.body;
-//   try {
-//     if (password < 6) {
-//       return res.status(400).json({ message: "password must me 6 characters" });
-//     }
-//     const user = await User.findOne({ email });
-//     if (user) return res.status(400).json({ message: "user already exists" });
+const checkAuth = asyncHandler((req,res)=>{
+res.status(200).json(req.user);
+})
+ 
 
-//     const salt = await bcrypt.genSalt(10);
-//     const hashedPassword = await bcrypt.hash(password, salt);
-//     const newUser = new User({
-//       fullName,
-//       email,
-//       password: hashedPassword,
-//     });
-//     if(newUser){
-//       //generate jwt token 
-//     }else{
-//       return res.status(400).json({ message: "invalid user data" });
-//     }
-//   } catch (error) {}
-// };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-export const login = (req, res) => {
-  res.send("login route");
-};
-
-export const logout = (req, res) => {
-  res.send("logout route");
-};
+export { signup, login, logout, updateProfile, checkAuth};
