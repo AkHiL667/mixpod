@@ -76,18 +76,56 @@ const logout = asyncHandler((req, res) => {
   res.status(200).json({ message: "logged out successfully" });
 });
 
-const updateProfile = asyncHandler(async(req, res)=>{
-  const {profilePic} = req.body;
-  const userId = req.user._id;
-  if(!profilePic){
-    return res.status(400).json({message:"profile pic is required"})
+const updateProfile = asyncHandler(async(req, res) => {
+  try {
+    const {profilePic} = req.body;
+    const userId = req.user._id;
+    
+    if(!profilePic){
+      return res.status(400).json({message: "Profile picture is required"});
+    }
+
+    // Validate the base64 image
+    if (!profilePic.startsWith('data:image/')) {
+      return res.status(400).json({message: "Invalid image format"});
+    }
+
+    // Upload to Cloudinary
+    let uploadResponse;
+    try {
+      uploadResponse = await cloudinary.uploader.upload(profilePic, {
+        folder: "profile_pics",
+        resource_type: "auto",
+        allowed_formats: ["jpg", "jpeg", "png", "gif"]
+      });
+    } catch (error) {
+      console.error("Cloudinary upload error:", error);
+      return res.status(500).json({ 
+        message: "Failed to upload image to Cloudinary",
+        error: error.message 
+      });
+    }
+
+    // Update user profile
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {profilePic: uploadResponse.secure_url},
+      {new: true}
+    ).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({message: "User not found"});
+    }
+
+    res.status(200).json(updatedUser);
+  } catch (error) {
+    console.error("Profile update error:", error);
+    res.status(500).json({
+      message: "Internal server error",
+      error: error.message
+    });
   }
-  const uploadResponse = await cloudinary.uploader.upload(profilePic)
-
-  const updatedUser = await User.findByIdAndUpdate(userId, {profilePic:uploadResponse.secure_url},{new:true})
-
-  res.status(200).json(updatedUser)
-})
+});
 
 const checkAuth = asyncHandler((req,res)=>{
 res.status(200).json(req.user);
