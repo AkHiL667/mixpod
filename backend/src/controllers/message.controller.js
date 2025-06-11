@@ -2,6 +2,8 @@ import asyncHandler from "express-async-handler";
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
 import cloudinary from "../lib/cloudinary.js";
+import { getReciverSocketId } from "../lib/socket.js";
+import { io } from "../lib/socket.js";
 
 const getUsersForSidebar = asyncHandler(async (req, res) => {
   const loggedInUserId = req.user.Id;
@@ -42,7 +44,12 @@ const sendMessage = asyncHandler(async (req, res) => {
     image: imageUrl,
   });
   await newMessage.save();
-  //todo: realtime functionallity =>socket.io
+ 
+  const reciverSocketId = getReciverSocketId(reciverId);
+  if(reciverSocketId){
+    io.to(reciverSocketId).emit("newMessage", newMessage);
+  }
+
   res.status(201).json(newMessage)
 });
 
