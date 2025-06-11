@@ -6,7 +6,7 @@ import { getReciverSocketId } from "../lib/socket.js";
 import { io } from "../lib/socket.js";
 
 const getUsersForSidebar = asyncHandler(async (req, res) => {
-  const loggedInUserId = req.user.Id;
+  const loggedInUserId = req.user._id;
   const filteredUsers = await User.find({
     _id: { $ne: loggedInUserId },
   }).select("-password");
@@ -17,12 +17,12 @@ const getUsersForSidebar = asyncHandler(async (req, res) => {
 });
 
 const getMessages = asyncHandler(async (req, res) => {
-  const { id: userToChatId } = req.params;
+  const { userId } = req.params;
   const myId = req.user._id;
   const messages = await Message.find({
     $or: [
-      { senderId: myId, reciverId: userToChatId },
-      { senderId: userToChatId, reciverId: myId },
+      { senderId: myId, reciverId: userId },
+      { senderId: userId, reciverId: myId },
     ],
   });
   res.status(200).json(messages);
@@ -30,7 +30,7 @@ const getMessages = asyncHandler(async (req, res) => {
 
 const sendMessage = asyncHandler(async (req, res) => {
   const { text, image } = req.body;
-  const { id: reciverId } = req.params;
+  const { userId } = req.params;
   const senderId = req.user._id;
   let imageUrl;
   if (image) {
@@ -39,13 +39,13 @@ const sendMessage = asyncHandler(async (req, res) => {
   }
   const newMessage = new Message({
     senderId,
-    reciverId,
+    reciverId: userId,
     text,
     image: imageUrl,
   });
   await newMessage.save();
  
-  const reciverSocketId = getReciverSocketId(reciverId);
+  const reciverSocketId = getReciverSocketId(userId);
   if(reciverSocketId){
     io.to(reciverSocketId).emit("newMessage", newMessage);
   }
