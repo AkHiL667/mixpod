@@ -1,23 +1,34 @@
-import React from "react";
+import React, { useEffect, lazy, Suspense } from "react";
 import Navbar from "./components/Navbar";
 import { Navigate, Route, Routes } from "react-router-dom";
-import HomePage from "./pages/HomePage";
-import SignUpPage from "./pages/SignUpPage";
-import LoginPage from "./pages/LoginPage";
-import SettingsPage from "./pages/SettingsPage";
-import ProfilePage from "./pages/ProfilePage";
 import { useAuthStore } from "./store/useAuthStore.js";
-import { useEffect } from "react";
 import { Loader } from "lucide-react";
 import { Toaster } from "react-hot-toast";
 import { useThemestore } from "./store/useThemeStore.js";
 import { useCallStore } from "./store/useCallStore";
 import CallInterface from "./components/CallInterface";
 
+// Lazy load pages
+const HomePage = lazy(() => import("./pages/HomePage"));
+const SignUpPage = lazy(() => import("./pages/SignUpPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+
 function App() {
   const { authUser, checkAuth, isCheckingAuth, onlineUsers, socket } = useAuthStore();
   const { theme } = useThemestore();
-  const { setStream, setCall, call, callAccepted, callEnded, setCallAccepted, setCallEnded } = useCallStore();
+  const { 
+    setStream, 
+    setCall, 
+    call, 
+    callAccepted, 
+    callEnded, 
+    setCallAccepted, 
+    setCallEnded, 
+    stream,
+    peer 
+  } = useCallStore();
 
   console.log({onlineUsers})
 
@@ -25,42 +36,45 @@ function App() {
     checkAuth();
   }, [checkAuth]);
 
+  // Cleanup function for media stream
   useEffect(() => {
-    // Request media permissions
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      .then((currentStream) => {
-        setStream(currentStream);
-      })
-      .catch((error) => {
-        console.error("Error accessing media devices:", error);
-      });
-
     return () => {
-      // Cleanup streams when component unmounts
-      const { stream } = useCallStore.getState();
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [stream]);
 
   useEffect(() => {
     if (!socket) return;
 
-    socket.on("callUser", ({ signal, from, name }) => {
-      setCall({ signal, from, name });
+    socket.on("callUser", ({ signal, from, name, isVideo }) => {
+      console.log("Received call from:", from, "isVideo:", isVideo);
+      setCall({ signal, from, name, isVideo }, true);
     });
 
     socket.on("callAccepted", (signal) => {
+      console.log("Call accepted, signal:", signal);
       setCallAccepted(true);
+      if (peer) {
+        peer.signal(signal);
+      }
     });
 
     socket.on("callRejected", () => {
+      console.log("Call rejected");
       setCall(null);
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
     });
 
     socket.on("callEnded", () => {
+      console.log("Call ended");
       setCallEnded(true);
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
     });
 
     return () => {
@@ -69,39 +83,33 @@ function App() {
       socket.off("callRejected");
       socket.off("callEnded");
     };
-  }, [socket, setCall, setCallAccepted, setCallEnded]);
+  }, [socket, setCall, setCallAccepted, setCallEnded, stream, peer]);
 
   console.log({ authUser });
   if (isCheckingAuth && !authUser) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader className="size-10 animate-spin" />
+      <div className="h-screen flex items-center justify-center">
+        <Loader className="w-8 h-8 animate-spin" />
       </div>
     ); 
   }
   return (
     <div data-theme={theme} className="">
       <Navbar />
-      <Routes>
-        <Route
-          path="/"
-          element={authUser ? <HomePage /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/signup"
-          element={!authUser ? <SignUpPage /> : <Navigate to="/" />}
-        />
-        <Route
-          path="/login"
-          element={!authUser ? <LoginPage /> : <Navigate to="/" />}
-        />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route
-          path="/profile"
-          element={authUser ? <ProfilePage /> : <Navigate to="/login" />}
-        />
-      </Routes>
-      <Toaster position="top-center" reverseOrder={false} />
+      <Toaster position="top-center" />
+      <Suspense fallback={
+        <div className="h-screen flex items-center justify-center">
+          <Loader className="w-8 h-8 animate-spin" />
+        </div>
+      }>
+        <Routes>
+          <Route path="/" element={authUser ? <HomePage /> : <Navigate to="/login" />} />
+          <Route path="/login" element={!authUser ? <LoginPage /> : <Navigate to="/" />} />
+          <Route path="/signup" element={!authUser ? <SignUpPage /> : <Navigate to="/" />} />
+          <Route path="/settings" element={authUser ? <SettingsPage /> : <Navigate to="/login" />} />
+          <Route path="/profile" element={authUser ? <ProfilePage /> : <Navigate to="/login" />} />
+        </Routes>
+      </Suspense>
       
       {/* Show call interface when in a call */}
       {call && !callEnded && (

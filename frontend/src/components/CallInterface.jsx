@@ -1,23 +1,42 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useCallStore } from "../store/useCallStore";
+import { useAuthStore } from "../store/useAuthStore";
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff } from "lucide-react";
 
 const CallInterface = () => {
-  const { stream, call, callAccepted, callEnded, endCall } = useCallStore();
+  const { 
+    stream, 
+    call, 
+    callAccepted, 
+    callEnded, 
+    endCall,
+    initializeMedia,
+    answerCall,
+    isVideo,
+    callRinging,
+    setCallRinging
+  } = useCallStore();
+  const { authUser } = useAuthStore();
+  
   const localVideoRef = useRef();
   const remoteVideoRef = useRef();
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
 
-  // Cleanup function
+  // Initialize media when component mounts
   useEffect(() => {
+    if (!stream) {
+      initializeMedia(call?.isVideo);
+    }
+
     return () => {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [stream]);
+  }, [stream, initializeMedia, call?.isVideo]);
 
+  // Set up local video
   useEffect(() => {
     if (localVideoRef.current && stream) {
       localVideoRef.current.srcObject = stream;
@@ -44,6 +63,66 @@ const CallInterface = () => {
 
   // Only show video elements if it's a video call
   const isVideoCall = call?.isVideo;
+  const isCaller = call && authUser && call.from === authUser._id;
+
+  // Callee: show Accept/Reject if callRinging and not accepted/ended and not the caller
+  if (callRinging && !callAccepted && !callEnded && !isCaller) {
+    return (
+      <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center">
+        <div className="text-white text-2xl mb-4">
+          Incoming {call?.isVideo ? 'Video' : 'Audio'} Call
+        </div>
+        <div className="text-white text-xl mb-8">
+          from {call?.name || 'Unknown'}
+        </div>
+        <div className="flex gap-4">
+          <button
+            className="btn btn-success btn-lg"
+            onClick={() => {
+              answerCall();
+              setCallRinging(false);
+            }}
+          >
+            <Phone className="mr-2" />
+            Accept
+          </button>
+          <button
+            className="btn btn-error btn-lg"
+            onClick={() => {
+              setCallRinging(false);
+              endCall();
+            }}
+          >
+            <PhoneOff className="mr-2" />
+            Reject
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Caller: show 'Calling...' if not accepted and not ended
+  if (isCaller && !callAccepted && !callEnded) {
+    return (
+      <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center">
+        <div className="text-white text-2xl mb-4">
+          Calling...
+        </div>
+        <div className="text-white text-xl mb-8">
+          Waiting for the other user to accept the call.
+        </div>
+        <button
+          className="btn btn-error btn-lg"
+          onClick={endCall}
+        >
+          <PhoneOff className="mr-2" />
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  console.log("CallInterface state:", { call, callRinging, callAccepted, callEnded, authUser });
 
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex flex-col">
@@ -52,6 +131,7 @@ const CallInterface = () => {
         {isVideoCall && (
           <>
             <video
+              id="remoteVideo"
               ref={remoteVideoRef}
               autoPlay
               playsInline

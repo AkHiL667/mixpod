@@ -14,13 +14,11 @@ const io = new Server(server, {
   },
 });
 
+const userSocketMap = {};
 
-export function getReciverSocketId(userId){
+export function getReciverSocketId(userId) {
   return userSocketMap[userId];
 }
-
-
-const userSocketMap = {};
 
 io.on("connection", (socket) => {
   console.log("a new client connected", socket.id);
@@ -45,13 +43,14 @@ io.on("connection", (socket) => {
   });
 
   // Handle call initiation
-  socket.on("callUser", ({ userToCall, signalData, from, name }) => {
+  socket.on("callUser", ({ userToCall, signalData, from, name, isVideo }) => {
     const userSocketId = userSocketMap[userToCall];
     if (userSocketId) {
       io.to(userSocketId).emit("callUser", {
         signal: signalData,
         from,
-        name
+        name,
+        isVideo
       });
     }
   });

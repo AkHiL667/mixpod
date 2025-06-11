@@ -1,46 +1,49 @@
 import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
 import SimplePeer from "simple-peer";
+import toast from "react-hot-toast";
 
 export const useCallStore = create((set, get) => ({
+  stream: null,
   call: null,
   callAccepted: false,
   callEnded: false,
-  stream: null,
-  peerConnection: null,
+  peer: null,
+  isVideo: false,
+  callRinging: false,
 
   setStream: (stream) => set({ stream }),
-  setCall: (call) => set({ call }),
+  setCall: (call, isIncoming = false) => set({ call, callRinging: isIncoming }),
   setCallAccepted: (accepted) => set({ callAccepted: accepted }),
   setCallEnded: (ended) => set({ callEnded: ended }),
-  setPeerConnection: (peer) => set({ peerConnection: peer }),
+  setCallRinging: (ringing) => set({ callRinging: ringing }),
 
-  initializeMediaStream: async (isVideo = true) => {
+  initializeMedia: async (isVideo = true) => {
     try {
-      const { stream } = get();
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      // Stop any existing tracks first
+      const currentStream = get().stream;
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
       }
-
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        video: isVideo,
-        audio: true
-      });
       
-      set({ stream: newStream });
+      const newStream = await navigator.mediaDevices.getUserMedia({ 
+        video: isVideo, 
+        audio: true 
+      });
+      set({ stream: newStream, isVideo });
       return newStream;
     } catch (error) {
       console.error("Error accessing media devices:", error);
-      throw error;
+      toast.error("Failed to access media devices");
+      return null;
     }
   },
 
-  startCall: async (userToCall, isVideo = true) => {
-    const { authUser, socket } = useAuthStore.getState();
-    
+  startCall: async (userToCall, isVideo) => {
     try {
-      const stream = await get().initializeMediaStream(isVideo);
-      
+      const stream = await get().initializeMedia(isVideo);
+      if (!stream) return;
+
       const peer = new SimplePeer({
         initiator: true,
         trickle: false,
@@ -48,37 +51,47 @@ export const useCallStore = create((set, get) => ({
       });
 
       peer.on("signal", (data) => {
+        const socket = useAuthStore.getState().socket;
         socket.emit("callUser", {
           userToCall,
           signalData: data,
-          from: authUser._id,
-          name: authUser.fullName,
+          from: useAuthStore.getState().authUser?._id,
+          name: useAuthStore.getState().authUser?.fullName,
           isVideo
         });
       });
 
       peer.on("stream", (remoteStream) => {
-        set({ stream: remoteStream });
+        const remoteVideo = document.querySelector("#remoteVideo");
+        if (remoteVideo) {
+          remoteVideo.srcObject = remoteStream;
+        }
       });
 
-      set({ peerConnection: peer });
+      set({ 
+        peer, 
+        isVideo,
+        call: {
+          isVideo,
+          from: useAuthStore.getState().authUser?._id,
+          to: userToCall
+        }
+      });
     } catch (error) {
       console.error("Error starting call:", error);
-      const { stream } = get();
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      toast.error("Failed to start call");
+      const currentStream = get().stream;
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
       }
-      set({ stream: null });
     }
   },
 
   answerCall: async () => {
-    const { call } = get();
-    const { socket } = useAuthStore.getState();
-
     try {
-      const stream = await get().initializeMediaStream(call.isVideo);
-      
+      const stream = await get().initializeMedia(get().call?.isVideo);
+      if (!stream) return;
+
       const peer = new SimplePeer({
         initiator: false,
         trickle: false,
@@ -86,44 +99,57 @@ export const useCallStore = create((set, get) => ({
       });
 
       peer.on("signal", (data) => {
-        socket.emit("answerCall", { signal: data, to: call.from });
+        const socket = useAuthStore.getState().socket;
+        socket.emit("answerCall", {
+          signal: data,
+          to: get().call.from
+        });
       });
 
       peer.on("stream", (remoteStream) => {
-        set({ stream: remoteStream });
+        const remoteVideo = document.querySelector("#remoteVideo");
+        if (remoteVideo) {
+          remoteVideo.srcObject = remoteStream;
+        }
       });
 
-      peer.signal(call.signal);
-      set({ peerConnection: peer, callAccepted: true });
+      peer.signal(get().call.signal);
+      set({ 
+        peer, 
+        callAccepted: true, 
+        isVideo: get().call?.isVideo,
+        callRinging: false
+      });
     } catch (error) {
       console.error("Error answering call:", error);
-      const { stream } = get();
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      toast.error("Failed to answer call");
+      const currentStream = get().stream;
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
       }
-      set({ stream: null });
     }
   },
 
   endCall: () => {
-    const { peerConnection, stream } = get();
-    const { socket } = useAuthStore.getState();
-    const { call } = get();
-
+    const { stream, peer } = get();
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
     }
-
-    if (call) {
-      socket.emit("endCall", { to: call.from });
+    if (peer) {
+      peer.destroy();
     }
-
+    const socket = useAuthStore.getState().socket;
+    if (socket && get().call) {
+      socket.emit("endCall", { to: get().call.from });
+    }
     set({
+      stream: null,
       call: null,
       callAccepted: false,
       callEnded: true,
-      stream: null,
-      peerConnection: null
+      peer: null,
+      isVideo: false,
+      callRinging: false
     });
   }
 }));

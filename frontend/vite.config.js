@@ -11,5 +11,8 @@ export default defineConfig({
     alias: {
       'simple-peer': 'simple-peer/simplepeer.min.js'
     }
+  },
+  optimizeDeps: {
+    include: ['simple-peer']
   }
 })

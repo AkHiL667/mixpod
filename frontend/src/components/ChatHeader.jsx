@@ -2,6 +2,7 @@ import { X, Phone, Video } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import { useCallStore } from "../store/useCallStore";
+import { toast } from "react-hot-toast";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
@@ -11,10 +12,18 @@ const ChatHeader = () => {
 
   // Add call button handlers
   const handleAudioCall = () => {
+    if (!selectedUser || !onlineUsers.includes(selectedUser._id)) {
+      toast.error("User is offline");
+      return;
+    }
     startCall(selectedUser._id, false); // false for audio-only call
   };
 
   const handleVideoCall = () => {
+    if (!selectedUser || !onlineUsers.includes(selectedUser._id)) {
+      toast.error("User is offline");
+      return;
+    }
     startCall(selectedUser._id, true); // true for video call
   };
 
@@ -43,6 +52,7 @@ const ChatHeader = () => {
             onClick={handleAudioCall}
             className="btn btn-circle btn-sm"
             title="Audio Call"
+            disabled={!onlineUsers.includes(selectedUser._id)}
           >
             <Phone size={18} />
           </button>
@@ -51,6 +61,7 @@ const ChatHeader = () => {
             onClick={handleVideoCall}
             className="btn btn-circle btn-sm"
             title="Video Call"
+            disabled={!onlineUsers.includes(selectedUser._id)}
           >
             <Video size={18} />
           </button>
@@ -63,4 +74,5 @@ const ChatHeader = () => {
     </div>
   );
 };
+
 export default ChatHeader;
