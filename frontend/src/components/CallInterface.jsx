@@ -20,6 +20,7 @@ const CallInterface = () => {
   
   const localVideoRef = useRef();
   const remoteVideoRef = useRef();
+  const remoteAudioRef = useRef();
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
 
@@ -137,13 +138,14 @@ const CallInterface = () => {
               playsInline
               className="w-full h-full object-cover"
             />
-            <div className="absolute bottom-4 right-4 w-48 h-36">
+            {/* Local video preview */}
+            <div className="absolute bottom-4 right-4 w-48 h-36 bg-black rounded-lg overflow-hidden shadow-lg">
               <video
                 ref={localVideoRef}
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full object-cover rounded-lg"
+                className="w-full h-full object-cover"
               />
             </div>
           </>
@@ -155,6 +157,7 @@ const CallInterface = () => {
             <div className="text-center text-white">
               <h2 className="text-2xl font-bold mb-2">Audio Call</h2>
               <p>Call in progress...</p>
+              <audio ref={remoteAudioRef} autoPlay />
             </div>
           </div>
         )}

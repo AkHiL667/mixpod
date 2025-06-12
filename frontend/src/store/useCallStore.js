@@ -63,8 +63,12 @@ export const useCallStore = create((set, get) => ({
 
       peer.on("stream", (remoteStream) => {
         const remoteVideo = document.querySelector("#remoteVideo");
-        if (remoteVideo) {
+        const remoteAudio = document.querySelector("audio");
+        if (remoteVideo && isVideo) {
           remoteVideo.srcObject = remoteStream;
+        }
+        if (remoteAudio && !isVideo) {
+          remoteAudio.srcObject = remoteStream;
         }
       });
 
@@ -108,8 +112,12 @@ export const useCallStore = create((set, get) => ({
 
       peer.on("stream", (remoteStream) => {
         const remoteVideo = document.querySelector("#remoteVideo");
-        if (remoteVideo) {
+        const remoteAudio = document.querySelector("audio");
+        if (remoteVideo && get().call?.isVideo) {
           remoteVideo.srcObject = remoteStream;
+        }
+        if (remoteAudio && !get().call?.isVideo) {
+          remoteAudio.srcObject = remoteStream;
         }
       });
 
