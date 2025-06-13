@@ -5,7 +5,14 @@ module.exports = {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      height:{
+        'screen-dvh':'100dvh',
+      },
+      minHeight: {
+        'screen-dvh':'100dvh',
+      }
+    },
   },
   plugins: [require("daisyui")],
   daisyui: {
