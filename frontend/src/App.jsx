@@ -94,7 +94,7 @@ function App() {
     ); 
   }
   return (
-    <div data-theme={theme} className="h-screen-dvh overflow-hidden">
+    <div data-theme={theme} className="h-screen-dvh overflow-y-auto">
       <Navbar />
       <Toaster position="top-center" />
       <Suspense fallback={
